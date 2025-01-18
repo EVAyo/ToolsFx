@@ -6,20 +6,19 @@ plugins {
 }
 
 javafx {
-    //latest version https://mvnrepository.com/artifact/org.openjfx/javafx-controls
-    version = rootProject.extra["jfx_version"] as String
+    // latest version https://mvnrepository.com/artifact/org.openjfx/javafx-controls
+    version = libs.versions.jfxVer.get()
     modules = listOf(
         "javafx.controls",
         "javafx.swing",
         "javafx.web",
-//            if you use javafx.fxml,then uncomment it
-//            'javafx.fxml'
+    // if you use javafx.fxml,then uncomment it
+    // "javafx.fxml"
     )
 }
 
 dependencies {
-//    implementation("no.tornado:tornadofx:$tornadofx_version")
     implementation(project(":plugin-lib"))
-    runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:${rootProject.extra["kotlin_version"]}")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit:${rootProject.extra["kotlin_version"]}")
+    implementation(project(":app"))
+    testImplementation(libs.kotlin.test)
 }

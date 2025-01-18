@@ -8,9 +8,11 @@ import kotlin.math.roundToInt
 object Base91 {
 
     private val ENCODING_TABLE =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,./:;<=>?@[]^_`{|}~\"".toByteArray()
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&()*+,./:;<=>?@[]^_`{|}~\""
+            .toByteArray()
     private val BASE = ENCODING_TABLE.size
     private const val AVERAGE_ENCODING_RATIO = 1.2297f
+
     fun encode(data: ByteArray, dict: ByteArray = ENCODING_TABLE): ByteArray {
         val estimatedSize = ceil((data.size * AVERAGE_ENCODING_RATIO).toDouble()).toInt()
         val output = ByteArrayOutputStream(estimatedSize)
@@ -29,7 +31,7 @@ object Base91 {
                     en -= 13
                 } else {
                     // 取14位
-                    ev = ebq and 16383
+                    ev = ebq and 16_383
                     // 右移 14位
                     ebq = ebq shr 14
                     en -= 14
@@ -54,9 +56,12 @@ object Base91 {
         val estimatedSize = (data.size / AVERAGE_ENCODING_RATIO).roundToInt()
         val output = ByteArrayOutputStream(estimatedSize)
         for (i in data.indices) {
-            if (dict.indexOf(data[i]) == -1) continue
-            if (dv == -1) dv = dict.indexOf(data[i])
-            else {
+            if (dict.indexOf(data[i]) == -1) {
+                continue
+            }
+            if (dv == -1) {
+                dv = dict.indexOf(data[i])
+            } else {
                 dv += dict.indexOf(data[i]) * BASE
                 dbq = dbq or (dv shl dn)
                 dn += if (dv and 8191 > 88) 13 else 14
@@ -69,7 +74,7 @@ object Base91 {
             }
         }
         if (dv != -1) {
-            output.write(((dbq or dv shl dn).toByte()).toInt())
+            output.write(((dbq or (dv shl dn)).toByte()).toInt())
         }
         return output.toByteArray()
     }
@@ -84,10 +89,14 @@ fun String.base91(dict: String = BASE91_DICT, charset: String = "UTF-8") =
 fun ByteArray.base91(dict: String = BASE91_DICT, charset: String = "UTF-8") =
     String(
         Base91.encode(this, dict.ifEmpty { BASE91_DICT }.toByteArray()),
-        Charset.forName(charset)
+        Charset.forName(charset),
     )
 
 fun String.base91Decode(dict: String = BASE91_DICT) =
-    Base91.decode(toByteArray(), dict.ifEmpty { BASE91_DICT }.toByteArray())
+    if (length > 1 && asIterable().all { it in dict.ifEmpty { BASE91_DICT } }) {
+        Base91.decode(toByteArray(), dict.ifEmpty { BASE91_DICT }.toByteArray())
+    } else {
+        error("非法字符")
+    }
 
 fun String.base91Decode2String(dict: String = BASE91_DICT) = String(base91Decode(dict))

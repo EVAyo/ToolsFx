@@ -3,4 +3,11 @@
 build/
 /.idea
 out/
-/ToolsFx.properties
+ToolsFx.properties
+local.properties
+/tools/*/
+dict/
+*.json
+downloads/
+.DS_store
+vocabulary/

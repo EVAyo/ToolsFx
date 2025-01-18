@@ -1,4 +1,6 @@
-package me.leon.classical
+package me.leon.ctf
+
+import me.leon.ext.stripAllSpace
 
 val DEFAULT_QWE =
     mapOf(
@@ -27,18 +29,39 @@ val DEFAULT_QWE =
         'W' to 'V',
         'X' to 'B',
         'Y' to 'N',
-        'Z' to 'M'
+        'Z' to 'M',
+        'a' to 'q',
+        'b' to 'w',
+        'c' to 'e',
+        'd' to 'r',
+        'e' to 't',
+        'f' to 'y',
+        'g' to 'u',
+        'h' to 'i',
+        'i' to 'o',
+        'j' to 'p',
+        'k' to 'a',
+        'l' to 's',
+        'm' to 'd',
+        'n' to 'f',
+        'o' to 'g',
+        'p' to 'h',
+        'q' to 'j',
+        'r' to 'k',
+        's' to 'l',
+        't' to 'z',
+        'u' to 'x',
+        'v' to 'c',
+        'w' to 'v',
+        'x' to 'b',
+        'y' to 'n',
+        'z' to 'm',
     )
 
 val DEFAULT_QWE_DECODE =
     mutableMapOf<Char, Char>().apply { putAll(DEFAULT_QWE.values.zip(DEFAULT_QWE.keys)) }
 
-fun String.qweEncrypt() =
-    uppercase().replace("\\s".toRegex(), "").toList().map { DEFAULT_QWE[it] }.joinToString("")
+fun String.qweEncrypt() = stripAllSpace().asIterable().map { DEFAULT_QWE[it] }.joinToString("")
 
 fun String.qweDecrypt() =
-    replace("\\s".toRegex(), "")
-        .uppercase()
-        .toList()
-        .map { DEFAULT_QWE_DECODE[it] }
-        .joinToString("")
+    stripAllSpace().asIterable().map { DEFAULT_QWE_DECODE[it] }.joinToString("")

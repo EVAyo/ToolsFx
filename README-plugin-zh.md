@@ -3,6 +3,7 @@
 <a href="README-plugin.md">English</a>|<a href="README-plugin-zh.md">中文</a>
 </p>
  <img width=0 height=0 src="https://profile-counter.glitch.me/Leon406/count.svg" alt="Leon406:: Visitor's Count" />
+ <img width=0 height=0 src="https://profile-counter.glitch.me/Leon406_ToolsFx/count.svg" alt="ToolsFx:: Visitor's Count" />
 
 ------
 
@@ -22,9 +23,9 @@
 
 ## 对比
 
-| 机制        | 加载时机            | 命名                                      |
-| ----------- | ------------------- | ----------------------------------------- |
-| classloader | **按需加载**        | 严格已全类名.jar命名,可以放在指定插件目录 |
+| 机制        | 加载时机            | 命名                          |
+| ----------- | ------------------- |-----------------------------|
+| classloader | **按需加载**        | 严格以全类名.jar命名,可以放在指定插件目录     |
 | spi         | 必须同主app一起加载 | **.jar结尾即可, lib目录或者指定默认加载** |
 
 
@@ -123,4 +124,40 @@ classloader目前遇到插件resource资源无法加载的问题,临时只能将
   {{lowercase(asdfAfsdf)}}
   ```
 
-  
+- datetime2Mills
+
+  ```
+  {{datetime2Mills(2022-01-01 10:00:00)}}
+  ```
+
+- date2Mills
+
+  ```
+  {{date2Mills(2022-01-01)}}
+  ```
+
+
+
+### Location (经纬度转换)
+
+![location](/art/plugin/location.gif)
+
+#### 地图key环境变量 
+
+- 百度 `ToolsFx-Location-KEY-BD`
+- 高德 `ToolsFx-Location-KEY-AMAP`
+- 天地图 `ToolsFx-Location-KEY-TIAN`
+
+### Compression (压缩)
+
+### 图片模块
+
+- png 宽高修复
+- 二进制01转图片
+- 二进制01转二维码
+- rgb色值 转图片
+- base64转图片
+- 图片转base64
+- gif 拆分
+
+插件下载 https://leon.lanzoub.com/b0d9w4cof 提取码：ax63

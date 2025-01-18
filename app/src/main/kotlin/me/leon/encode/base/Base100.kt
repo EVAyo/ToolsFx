@@ -1,4 +1,4 @@
-package me.leon
+package me.leon.encode.base
 
 const val BASE100_BYTE1 = 0xf0.toByte()
 const val BASE100_BYTE2 = 0x9f.toByte()
@@ -15,11 +15,9 @@ fun ByteArray.base100() =
         }
     )
 
-fun String.base100() = toByteArray().base100()
-
 fun String.base100Decode() =
     with(toByteArray()) {
-        toList()
+        asIterable()
             .chunked(4)
             .filter { it.first() == BASE100_BYTE1 && it[1] == BASE100_BYTE2 }
             .foldIndexed(ByteArray(this.size / 4)) { index, acc, list ->

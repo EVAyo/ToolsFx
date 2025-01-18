@@ -1,12 +1,17 @@
 package me.leon.classical
 
-import me.leon.ext.sliceList
+import me.leon.ext.*
 
-const val ADFGX_ENCODEMAP = "ADFGX"
+const val ADFGX_ENCODE_MAP = "ADFGX"
 
-fun String.adfgx(table: String, keyword: String): String {
-    val key = keyword.toList().distinct().joinToString("")
-    val polybius = polybius(table, ADFGX_ENCODEMAP)
+fun String.adfgx(
+    table: String,
+    keyword: String,
+    encodeMap: String = ADFGX_ENCODE_MAP,
+    replacePair: Pair<String, String> = "J" to "I",
+): String {
+    val key = keyword.distinct()
+    val polybius = polybius(table, encodeMap, replacePair)
     val keyM =
         key.fold(mutableMapOf<Char, MutableList<String>>()) { acc, c ->
             acc.apply { acc[c] = mutableListOf() }
@@ -21,14 +26,17 @@ fun String.adfgx(table: String, keyword: String): String {
         .joinToString("") { it.joinToString("") }
 }
 
-fun String.adfgxDecrypt(table: String, keyword: String): String {
-    val key = keyword.toList().distinct().joinToString("")
-    val sortedKey = key.toList().sorted().joinToString("")
+fun String.adfgxDecrypt(
+    table: String,
+    keyword: String,
+    encodeMap: String = ADFGX_ENCODE_MAP,
+): String {
+    val key = keyword.distinct()
+    val sortedKey = key.sorted()
     val count = length % key.length
     val len = length / key.length
     val keyM2: MutableMap<Char, Pair<MutableList<Char>, Int>> =
-        key
-            .foldIndexed(mutableMapOf<Char, Pair<MutableList<Char>, Int>>()) { index, acc, c ->
+        key.foldIndexed(mutableMapOf<Char, Pair<MutableList<Char>, Int>>()) { index, acc, c ->
                 acc.apply {
                     acc[c] = mutableListOf<Char>() to (len + (if (index < count) 1 else 0))
                 }
@@ -44,5 +52,5 @@ fun String.adfgxDecrypt(table: String, keyword: String): String {
             }
         }
         .joinToString("")
-        .polybiusDecrypt(table, ADFGX_ENCODEMAP)
+        .polybiusDecrypt(table, encodeMap)
 }

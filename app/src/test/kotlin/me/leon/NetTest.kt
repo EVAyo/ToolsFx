@@ -1,11 +1,9 @@
 package me.leon
 
-import java.io.File
+import kotlin.test.assertEquals
 import me.leon.encode.base.base64
-import me.leon.ext.cast
-import me.leon.ext.readBytesFromNet
-import me.leon.ext.readHeadersFromNet
-import me.leon.ext.safeAs
+import me.leon.ext.*
+import me.leon.misc.net.*
 import org.junit.Test
 
 class NetTest {
@@ -17,7 +15,10 @@ class NetTest {
                 "19098&keySource=VodBuildInKMS")
             .readBytesFromNet()
             .base64()
-            .also { println(it) }
+            .also {
+                println(it)
+                assertEquals("5VyPyIv3693VdklBeXVY3g==", it)
+            }
     }
 
     @Test
@@ -30,34 +31,32 @@ class NetTest {
     }
 
     @Test
-    fun fetchJson() {
-        var l: MutableList<String>? = mutableListOf("", "")
-        l.safeAs<HashSet<String>>().also { println(it) }
-        l = null
-        l.safeAs<HashSet<String>>().also { println(it) }
-        l.cast<HashSet<String>>()
-    }
-
-    @Test
     fun fileRead() {
-        val dir = "C:\\Users\\Leon\\Downloads\\Compressed\\m_zygsctf02\\m_zygsctf02"
-        File(dir).listFiles().filter { it.readText().contains("key|flag|ctf".toRegex()) }.also {
-            println(it)
-        }
+        TEST_PRJ_DIR.listFiles()
+            ?.filter { it.isFile && it.readText().contains("key|flag|ctf".toRegex()) }
+            .also { println(it) }
     }
 
     @Test
     fun fileType() {
-        var fileDir = "C:/Users/Leon/Desktop"
-        fileDir = "E:\\gitrepo\\Android-app"
-        fileDir = "E:\\software\\Lily5\\soft\\dev\\cmder"
-        //        fileDir = "D:\\BaiduNetdiskDownload\\雷电\\LDPlayer"
+        TEST_PRJ_DIR.listFiles()?.forEach { println(it.realExtension()) }
+    }
 
-        //        File(fileDir).walk().filter { it.isFile }.forEach {
-        //            println("$it  ${it.realExtension()}" )
-        //        }
-        File("C:\\Users\\Leon\\Desktop\\buldChm").listFiles()?.forEach {
-            println(it.realExtension())
-        }
+    @Test
+    //    @Ignore
+    fun whois() {
+
+        Whois.parse("taobao.com").also { println(it?.showInfo) }
+
+        Whois.parse("www.52pojie.cn").also { println(it?.showInfo) }
+    }
+
+    @Test
+    fun whoisSocket() {
+        //        flushSquid()
+        //        println("52pojie.cn".whoisSocket())
+        //        println("taobao.com".whoisSocket())
+        println("taobao.新闻".whoisSocket())
+        println("ctf.mzy0.com".whoisSocket())
     }
 }

@@ -1,24 +1,24 @@
 group = "me.leon.toolsfx"
-version = "1.0.0"
+version = "1.1.0"
 
 plugins {
     `java-library`
 }
 
 javafx {
-    //latest version https://mvnrepository.com/artifact/org.openjfx/javafx-controls
-    version = rootProject.extra["jfx_version"] as String
+    // latest version https://mvnrepository.com/artifact/org.openjfx/javafx-controls
+    version = libs.versions.jfxVer.get()
     modules = listOf(
         "javafx.controls",
         "javafx.swing",
         "javafx.web",
-//            if you use javafx.fxml,then uncomment it
-//            'javafx.fxml'
+        // if you use javafx.fxml,then uncomment it
+        // "javafx.fxml"
     )
 }
 
 dependencies {
-    api("no.tornado:tornadofx:${rootProject.extra["tornadofx_version"]}")
-    api("org.jetbrains.kotlin:kotlin-reflect:${rootProject.extra["kotlin_version"]}")
-    api("org.glassfish:javax.json:${rootProject.extra["javax_json_version"]}")
+    api(libs.tornadofx)
+    api(libs.kotlin.reflect)
+    api(libs.javax.json)
 }

@@ -14,11 +14,12 @@ interface CLibrary : Library {
 
     companion object {
         val INSTANCE =
-            Native.load(if (Platform.isWindows()) "msvcrt" else "c", CLibrary::class.java) as
-                CLibrary
+            Native.load(if (Platform.isWindows()) "msvcrt" else "c", CLibrary::class.java)
+                as CLibrary
     }
 }
 
+@Suppress("TestFunctionName")
 interface Kernel32 :
     StdCallLibrary { // Method declarations, constant and structure definitions go here
     fun GetSystemTime(result: SystemTime?)
@@ -31,6 +32,7 @@ class JniTest {
         val args = listOf("a", "b", "c")
         args.forEachIndexed { i, s -> CLibrary.INSTANCE.printf("Argument %d: %s\n", i, s) }
     }
+
     @Test
     fun kernel32() {
         val lib = Native.load("kernel32", Kernel32::class.java) as Kernel32
