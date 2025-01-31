@@ -7,19 +7,8 @@ import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 
 internal class MyX509TrustManager(caPath: String?, caPassword: String) : X509TrustManager {
+
     private var sunJSSEX509TrustManager: X509TrustManager? = null
-
-    override fun checkClientTrusted(x509Certificates: Array<X509Certificate>, s: String) {
-        runCatching { sunJSSEX509TrustManager!!.checkClientTrusted(x509Certificates, s) }
-    }
-
-    override fun checkServerTrusted(x509Certificates: Array<X509Certificate>, s: String) {
-        runCatching { sunJSSEX509TrustManager!!.checkServerTrusted(x509Certificates, s) }
-    }
-
-    override fun getAcceptedIssuers(): Array<X509Certificate> {
-        return sunJSSEX509TrustManager!!.acceptedIssuers
-    }
 
     init {
         val ks = KeyStore.getInstance("JKS")
@@ -34,5 +23,17 @@ internal class MyX509TrustManager(caPath: String?, caPassword: String) : X509Tru
                 sunJSSEX509TrustManager = tms[i] as X509TrustManager
             }
         }
+    }
+
+    override fun checkClientTrusted(x509Certificates: Array<X509Certificate>, s: String) {
+        runCatching { sunJSSEX509TrustManager!!.checkClientTrusted(x509Certificates, s) }
+    }
+
+    override fun checkServerTrusted(x509Certificates: Array<X509Certificate>, s: String) {
+        runCatching { sunJSSEX509TrustManager!!.checkServerTrusted(x509Certificates, s) }
+    }
+
+    override fun getAcceptedIssuers(): Array<X509Certificate> {
+        return sunJSSEX509TrustManager!!.acceptedIssuers
     }
 }

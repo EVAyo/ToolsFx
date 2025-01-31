@@ -1,12 +1,20 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package me.leon.toolsfx.plugin.net
 
 import java.io.DataOutputStream
 import java.io.File
 import java.net.*
+import java.security.cert.X509Certificate
 import java.util.UUID
-import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.*
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.set
 import kotlin.system.measureTimeMillis
-import tornadofx.JsonBuilder
+import me.leon.encode.base.base64
+import me.leon.ext.toHex
+import tornadofx.*
 
 object HttpUrlUtil {
     private val httpsDelegate by lazy {
@@ -14,28 +22,71 @@ object HttpUrlUtil {
         clazz.getDeclaredField("delegate").apply { isAccessible = true }
     }
 
-    private var DEFAULT_PRE_ACTION: (Request) -> Unit = {}
-    private var DEFAULT_POST_ACTION: (ByteArray) -> String = { it.decodeToString() }
-    private var isDebug = false
-    var timeOut = 10000
+    const val APPLICATION_URL_ENCODE = "application/x-www-form-urlencoded"
+    const val HEADER_PROXY_AUTH = "Proxy-Authorization"
+    const val PROPERTY_AUTH_TUNNELING = "jdk.http.auth.tunneling.disabledSchemes"
+    private val DEFAULT_PRE_ACTION: (Request) -> Unit = {}
+    val POST_ACTION_DEFAULT: (ByteArray) -> String = { it.decodeToString() }
+    val POST_ACTION_HEX: (ByteArray) -> String = { it.toHex() }
+    var isDebug = false
+    var timeOut = 10_000
     private var proxy: Proxy = Proxy.NO_PROXY
-    var downloadFolder: String =
-        File(File("").absoluteFile, "downloads").also { if (!it.exists()) it.mkdirs() }.absolutePath
+    var followRedirect: Boolean = false
+    var downloadFolder = File(File("").absoluteFile, "downloads")
     private var preAction: (Request) -> Unit = DEFAULT_PRE_ACTION
-    private var postAction: (ByteArray) -> String = DEFAULT_POST_ACTION
+    private var postAction: (ByteArray) -> String = POST_ACTION_DEFAULT
 
     private const val PREFIX = "--"
     private const val LINE_END = "\r\n"
     private const val CONTENT_TYPE_FORM_DATA = "multipart/form-data"
 
-    fun setupProxy(type: Proxy.Type, host: String, port: Int) {
+    private val ALL_TRUST_MANAGER =
+        object : X509TrustManager {
+            override fun checkClientTrusted(
+                paramArrayOfX509Certificate: Array<X509Certificate?>?,
+                paramString: String?,
+            ) {
+                // nop
+            }
+
+            override fun checkServerTrusted(
+                paramArrayOfX509Certificate: Array<X509Certificate?>?,
+                paramString: String?,
+            ) {
+                // nop
+            }
+
+            override fun getAcceptedIssuers(): Array<X509Certificate>? {
+                return null
+            }
+        }
+
+    val globalHeaders: MutableMap<String, Any> = mutableMapOf()
+
+    fun setupProxy(
+        type: Proxy.Type,
+        host: String,
+        port: Int,
+        user: String = "",
+        pass: String = "",
+    ) {
         proxy =
-            if (type == Proxy.Type.DIRECT) Proxy.NO_PROXY
-            else Proxy(type, InetSocketAddress(host, port))
+            if (type == Proxy.Type.DIRECT) {
+                removeAuth()
+                Proxy.NO_PROXY
+            } else {
+                Proxy(type, InetSocketAddress(host, port))
+            }
+        if (user.isNotEmpty() && pass.isNotEmpty()) {
+            auth(user, pass)
+        }
     }
 
     fun setupProxy(proxy: Proxy = Proxy.NO_PROXY) {
         HttpUrlUtil.proxy = proxy
+        if (proxy == Proxy.NO_PROXY) {
+            removeAuth()
+        }
     }
 
     fun addPreHandle(action: (Request) -> Unit) {
@@ -46,21 +97,40 @@ object HttpUrlUtil {
         postAction = action
     }
 
-    val globalHeaders =
-        mutableMapOf(
-            "Accept" to "*/*",
-            "Connection" to "Keep-Alive",
-            "Content-Type" to "application/json; charset=utf-8",
-            "User-Agent" to
-                "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko)" +
-                    " Chrome/86.0.4240.198 Safari/537.36",
+    fun verifySSL(enable: Boolean = true) {
+        val sc = SSLContext.getInstance("TLS")
+        HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
+        sc.init(null, if (enable) null else arrayOf(ALL_TRUST_MANAGER), null)
+        HttpsURLConnection.setDefaultSSLSocketFactory(sc.socketFactory)
+    }
+
+    private fun auth(user: String, pass: String) {
+        // http请求 设置 "Proxy-Authorization" 即可
+        globalHeaders[HEADER_PROXY_AUTH] = basic(user, pass)
+        // https key code
+        System.setProperty(PROPERTY_AUTH_TUNNELING, "")
+        Authenticator.setDefault(
+            object : Authenticator() {
+                override fun getPasswordAuthentication(): PasswordAuthentication {
+                    return PasswordAuthentication(user, pass.toCharArray())
+                }
+            }
         )
+    }
+
+    private fun removeAuth() {
+        // http请求 设置 "Proxy-Authorization" 即可
+        globalHeaders.remove(HEADER_PROXY_AUTH)
+        // https key code
+        System.clearProperty(PROPERTY_AUTH_TUNNELING)
+        Authenticator.setDefault(null)
+    }
 
     fun get(
         url: String,
         params: MutableMap<String, Any> = mutableMapOf(),
         headers: MutableMap<String, Any> = mutableMapOf(),
-        isDownload: Boolean = false
+        isDownload: Boolean = false,
     ): Response {
         val req = Request(url, "GET", params, headers)
         preAction(req)
@@ -75,6 +145,7 @@ object HttpUrlUtil {
             httpConfig(conn)
             conn.connect()
             if (isDownload) {
+                if (!downloadFolder.exists()) downloadFolder.mkdirs()
                 File(downloadFolder, NetHelper.getNetFileName(conn))
                     .also { rsp = "fileLocation: ${it.absolutePath}" }
                     .outputStream()
@@ -94,7 +165,7 @@ object HttpUrlUtil {
 
     private fun httpConfig(conn: HttpURLConnection, info: String = "") {
         conn.doOutput = true
-        conn.instanceFollowRedirects = true
+        conn.instanceFollowRedirects = followRedirect
         conn.readTimeout = timeOut
         conn.connectTimeout = timeOut
         showRequestInfo(conn, info)
@@ -114,18 +185,23 @@ object HttpUrlUtil {
         url: String,
         method: String,
         params: MutableMap<String, Any> = mutableMapOf(),
-        headers: MutableMap<String, Any> = mutableMapOf()
+        headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
         val req = Request(url, method, params, headers)
         preAction(req)
+        val paramConcatChar = "&".takeIf { url.contains("?") } ?: "?"
         val realUrl =
-            req.url.takeIf { req.params.isEmpty() } ?: "${req.url}?${req.params.toParams()}"
+            req.url.takeIf { req.params.isEmpty() }
+                ?: "${req.url}$paramConcatChar${req.params.toParams()}"
         val conn = URL(realUrl).openConnection(proxy) as HttpURLConnection
         var rsp: String
         val header = makeHeaders(req.headers)
         val time = measureTimeMillis {
-            if (method == "PATCH" || method == "CONNECT") patchConnection(conn, method)
-            else conn.requestMethod = req.method
+            if (method == "PATCH" || method == "CONNECT") {
+                patchConnection(conn, method)
+            } else {
+                conn.requestMethod = req.method
+            }
             for ((k, v) in header) conn.setRequestProperty(k, v.toString())
             httpConfig(conn)
             conn.connect()
@@ -163,14 +239,49 @@ object HttpUrlUtil {
     ): Response {
         val req = Request(url, "POST", params, headers)
         preAction(req)
-        val data = if (isJson) req.params.toJson() else req.params.toParams()
+        val urlEncode = headers.values.any { (it as String).contains(APPLICATION_URL_ENCODE) }
+        val data = if (isJson) req.params.toJson() else req.params.toParams(urlEncode)
         return postData(url, data, headers)
+    }
+
+    fun getBody(
+        url: String,
+        data: String,
+        headers: MutableMap<String, Any> = mutableMapOf(),
+    ): Response {
+        val req = Request(url, "GET", mutableMapOf(), headers)
+        preAction(req)
+        val conn = URL(url).openConnection(proxy) as HttpURLConnection
+        var rsp: String
+
+        val header = makeHeaders(req.headers)
+        val dataBytes = data.toByteArray()
+        val time = measureTimeMillis {
+            conn.requestMethod = req.method
+            for ((k, v) in header) conn.setRequestProperty(k, v.toString())
+            if (dataBytes.isNotEmpty()) {
+                conn.addRequestProperty("Content-Length", dataBytes.size.toString())
+            }
+            httpConfig(conn, data)
+            conn.connect()
+            conn.outputStream.write(dataBytes)
+            conn.outputStream.flush()
+            conn.outputStream.close()
+            rsp =
+                if (conn.responseCode == HttpURLConnection.HTTP_OK) {
+                    conn.inputStream.use { postAction(it.readBytes()) }
+                } else {
+                    conn.body().decodeToString()
+                }
+        }
+
+        return afterResponse(conn, time, rsp)
     }
 
     fun postData(
         url: String,
         data: String,
-        headers: MutableMap<String, Any> = mutableMapOf()
+        headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
         val req = Request(url, "POST", mutableMapOf(), headers)
         preAction(req)
@@ -182,9 +293,10 @@ object HttpUrlUtil {
         val time = measureTimeMillis {
             conn.requestMethod = req.method
             for ((k, v) in header) conn.setRequestProperty(k, v.toString())
-            if (dataBytes.isNotEmpty())
+            if (dataBytes.isNotEmpty()) {
                 conn.addRequestProperty("Content-Length", dataBytes.size.toString())
-            httpConfig(conn)
+            }
+            httpConfig(conn, data)
             conn.connect()
             conn.outputStream.write(dataBytes)
             conn.outputStream.flush()
@@ -205,7 +317,7 @@ object HttpUrlUtil {
         files: List<File>,
         name: String = "file",
         params: MutableMap<String, Any> = mutableMapOf(),
-        headers: MutableMap<String, Any> = mutableMapOf()
+        headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
         val req = Request(url, "POST", params, headers)
         val boundary = "Leon406_" + UUID.randomUUID().toString().replace("-", "")
@@ -222,18 +334,15 @@ object HttpUrlUtil {
             httpConfig(conn, "octet-stream")
             DataOutputStream(conn.outputStream).use { out ->
                 val sbParams = makeMultiPartParamBody(req, boundary)
-                out.write(sbParams.toString().also { println(it) }.toByteArray())
+                out.write(sbParams.toString().toByteArray())
+
                 for (file in files) {
                     val sb = makeMultipartFileBody(boundary, name, file)
-                    out.write(sb.toString().also { println(it) }.toByteArray())
-                    file.inputStream().use {
-                        out.write(it.readBytes().also { println(it.decodeToString()) })
-                    }
+                    out.write(sb.toString().toByteArray())
+                    file.inputStream().use { out.write(it.readBytes()) }
                     out.write(LINE_END.toByteArray())
-                    out.write(
-                        (PREFIX + boundary + PREFIX + LINE_END).also { println(it) }.toByteArray()
-                    )
                 }
+                out.write((PREFIX + boundary + PREFIX + LINE_END).toByteArray())
                 out.flush()
             }
 
@@ -251,7 +360,7 @@ object HttpUrlUtil {
     private fun makeMultipartFileBody(
         boundary: String,
         name: String,
-        file: File
+        file: File,
     ): java.lang.StringBuilder? {
         return StringBuilder(PREFIX)
             .append(boundary)
@@ -290,17 +399,18 @@ object HttpUrlUtil {
             .append(conn.url.toString())
             .append(" (${time}ms)")
             .appendLine()
-        conn.headerFields.filter { it.key != null }.forEach { (t, u) ->
-            sb.append("\t$t: ${u.joinToString(";")}").appendLine()
-        }
+        conn.headerFields
+            .filter { it.key != null }
+            .forEach { (t, u) -> sb.append("\t$t: ${u.joinToString(";")}").appendLine() }
         sb.appendLine()
             .also {
-                if (rsp.isNotEmpty())
+                if (rsp.isNotEmpty()) {
                     it.append("\t")
                         .append("body:")
                         .appendLine()
                         .append(rsp.split("\n").joinToString("\n") { "\t\t$it" })
                         .appendLine()
+                }
             }
             .append("<-- END HTTP")
         println(sb.toString())
@@ -329,7 +439,12 @@ object HttpUrlUtil {
         println(sb.toString())
     }
 
-    private fun Map<String, Any>.toParams() = entries.joinToString("&") { it.key + "=" + it.value }
+    fun Map<String, Any>.toParams(isEncode: Boolean = false) =
+        entries.joinToString("&") {
+            (it.key.takeUnless { isEncode } ?: it.key.urlEncoded) +
+                "=" +
+                (it.value.takeUnless { isEncode } ?: it.value.toString().urlEncoded)
+        }
 
     private fun Map<String, Any>.toJson(): String =
         entries
@@ -347,3 +462,5 @@ object HttpUrlUtil {
             .build()
             .toString()
 }
+
+fun basic(user: String, pass: String) = "Basic " + "$user:$pass".base64()

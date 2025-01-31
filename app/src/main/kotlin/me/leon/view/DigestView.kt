@@ -3,193 +3,285 @@ package me.leon.view
 import java.io.File
 import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleStringProperty
-import javafx.geometry.Pos
 import javafx.scene.control.*
+import javafx.scene.layout.Priority
+import me.leon.*
 import me.leon.controller.DigestController
+import me.leon.encode.base.base64
+import me.leon.encode.base.base64Decode
 import me.leon.ext.*
+import me.leon.ext.fx.*
+import tornadofx.*
 import tornadofx.FX.Companion.messages
-import tornadofx.View
-import tornadofx.action
-import tornadofx.asObservable
-import tornadofx.borderpane
-import tornadofx.button
-import tornadofx.checkbox
-import tornadofx.combobox
-import tornadofx.enableWhen
-import tornadofx.get
-import tornadofx.hbox
-import tornadofx.imageview
-import tornadofx.label
-import tornadofx.paddingAll
-import tornadofx.paddingLeft
-import tornadofx.textarea
-import tornadofx.vbox
 
-class DigestView : View(messages["hash"]) {
+class DigestView : Fragment(messages["hash"]) {
     private val controller: DigestController by inject()
+
+    private var timeConsumption = 0L
+    private var startTime = 0L
+    private var inputEncode = "raw"
+    private var method = "MD5"
+
     override val closeable = SimpleBooleanProperty(false)
-    private val isFileMode = SimpleBooleanProperty(false)
-    private val isProcessing = SimpleBooleanProperty(false)
-    private val isSingleLine = SimpleBooleanProperty(false)
-    private lateinit var taInput: TextArea
-    private lateinit var labelInfo: Label
-    lateinit var taOutput: TextArea
+    private val fileMode = SimpleBooleanProperty(false)
+    private val processing = SimpleBooleanProperty(false)
+    private val singleLine = SimpleBooleanProperty(false)
+    private val maskMode = SimpleBooleanProperty(false)
+    private val enableFileMode = SimpleBooleanProperty(true)
+    private val selectedAlg = SimpleStringProperty(ALGOS_HASH.keys.first())
+    private val selectedBits = SimpleStringProperty(ALGOS_HASH.values.first().first())
+
+    private var taInput: TextArea by singleAssign()
+    private var labelInfo: Label by singleAssign()
+    private var taOutput: TextArea by singleAssign()
+    private var tfCount: TextField by singleAssign()
+    private var tfMask: TextField by singleAssign()
+    private var tfCustomDict: TextField by singleAssign()
+    private var cbBits: ComboBox<String> by singleAssign()
+
     private var inputText: String
         get() = taInput.text
         set(value) {
             taInput.text = value
         }
+
     private var outputText: String
         get() = taOutput.text
         set(value) {
             taOutput.text = value
         }
-    var method = "MD5"
+
+    private val times
+        get() = tfCount.text.toIntOrNull() ?: 1.also { tfCount.text = "1" }
 
     private val eventHandler = fileDraggedHandler {
         inputText =
-            if (isFileMode.get())
+            if (fileMode.get()) {
                 it.joinToString(System.lineSeparator(), transform = File::getAbsolutePath)
-            else
-                with(it.first()) {
-                    if (length() <= 10 * 1024 * 1024)
-                        if (realExtension() in unsupportedExts) "unsupported file extension"
-                        else readText()
-                    else "not support file larger than 10M"
-                }
+            } else {
+                it.first().properText()
+            }
     }
 
-    // https://www.bouncycastle.org/specifications.html
-    private val algs =
-        linkedMapOf(
-            "MD5" to listOf("128"),
-            "MD4" to listOf("128"),
-            "MD2" to listOf("128"),
-            "SM3" to listOf("256"),
-            "Tiger" to listOf("192"),
-            "Whirlpool" to listOf("512"),
-            "SHA1" to listOf("160"),
-            "SHA2" to listOf("224", "256", "384", "512", "512/224", "512/256"),
-            "SHA3" to listOf("224", "256", "384", "512"),
-            "RIPEMD" to listOf("128", "160", "256", "320"),
-            "Keccak" to listOf("224", "256", "288", "384", "512"),
-            "Blake2b" to listOf("160", "256", "384", "512"),
-            "Blake2s" to listOf("160", "224", "256"),
-            "DSTU7564" to listOf("256", "384", "512"),
-            "Skein" to
-                listOf(
-                    "256-160",
-                    "256-224",
-                    "256-256",
-                    "512-128",
-                    "512-160",
-                    "512-224",
-                    "512-256",
-                    "512-384",
-                    "512-512",
-                    "1024-384",
-                    "1024-512",
-                    "1024-1024"
-                ),
-            "GOST3411" to listOf("256"),
-            "GOST3411-2012" to listOf("256", "512"),
-            "Haraka" to listOf("256", "512"),
-            "CRC" to listOf("32", "64"),
-        )
-    private val selectedAlgItem = SimpleStringProperty(algs.keys.first())
-    private val selectedBits = SimpleStringProperty(algs.values.first().first())
-    lateinit var cbBits: ComboBox<String>
     private val info
-        get() = "Hash: $method bits: ${selectedBits.get()}  file mode: ${isFileMode.get()}"
+        get() =
+            "Hash: $method bits: ${selectedBits.get()} " +
+                "${messages["inputLength"]}: ${inputText.length}  " +
+                "${messages["outputLength"]}: ${outputText.length}  " +
+                "count: $times cost: $timeConsumption ms  " +
+                "file mode: ${fileMode.get()}"
 
     private val centerNode = vbox {
-        paddingAll = DEFAULT_SPACING
-        spacing = DEFAULT_SPACING
+        addClass(Styles.group)
         hbox {
+            addClass(Styles.left)
             label(messages["input"])
-            button(graphic = imageview("/img/import.png")) {
+
+            togglegroup {
+                radiobutton("raw") { isSelected = true }
+                radiobutton("base64")
+                radiobutton("hex")
+                selectedToggleProperty().addListener { _, _, newValue ->
+                    inputEncode = newValue.cast<RadioButton>().text
+                }
+            }
+
+            button(graphic = imageview(IMG_IMPORT)) {
+                tooltip(messages["pasteFromClipboard"])
                 action { inputText = clipboardText() }
             }
         }
-        taInput =
-            textarea {
-                promptText = messages["inputHint"]
-                isWrapText = true
-                onDragEntered = eventHandler
-            }
+        taInput = textarea {
+            promptText = messages["inputHint"]
+            isWrapText = true
+            onDragEntered = eventHandler
+        }
         hbox {
-            alignment = Pos.CENTER_LEFT
+            addClass(Styles.left)
             label(messages["alg"])
-            combobox(selectedAlgItem, algs.keys.toMutableList()) { cellFormat { text = it } }
+            combobox(selectedAlg, ALGOS_HASH.keys.toMutableList()) { cellFormat { text = it } }
             label(messages["bits"])
             cbBits =
-                combobox(selectedBits, algs.values.first()) {
+                combobox(selectedBits, ALGOS_HASH.values.first()) {
                     cellFormat { text = it }
                     isDisable = true
                 }
         }
 
-        selectedAlgItem.addListener { _, _, newValue ->
+        selectedAlg.addListener { _, _, newValue ->
             newValue?.run {
-                cbBits.items = algs[newValue]!!.asObservable()
-                selectedBits.set(algs[newValue]!!.first())
-                cbBits.isDisable = algs[newValue]!!.size == 1
+                cbBits.items = ALGOS_HASH[newValue]!!.asObservable()
+                selectedBits.set(ALGOS_HASH[newValue]!!.first())
+                cbBits.isDisable = ALGOS_HASH[newValue]!!.size == 1
             }
         }
 
-        selectedBits.addListener { _, _, newValue ->
-            println("selectedBits __ $newValue")
-            newValue?.run {
+        selectedBits.addListener { _, _, new ->
+            println("selectedBits __ $new")
+            new?.run {
                 method =
-                    "${selectedAlgItem.get()}${newValue.takeIf { algs[selectedAlgItem.get()]!!.size > 1 } ?: ""}"
-                        .replace("SHA2", "SHA-")
-                        .replace(
-                            "(Haraka|GOST3411-2012|Keccak|SHA3|Blake2b|Blake2s|DSTU7564|Skein)".toRegex(),
-                            "$1-"
-                        )
+                    if (selectedAlg.get() in arrayOf("PasswordHashing", "Windows")) {
+                        enableFileMode.value = false
+                        new
+                    } else {
+                        enableFileMode.value = true
+                        "${selectedAlg.get()}${new.takeIf { ALGOS_HASH[selectedAlg.get()]!!.size > 1 }.orEmpty()}"
+                            .replace("SHA2", "SHA-")
+                            .replace(
+                                "(Haraka|GOST3411-2012|Keccak|SHA3|Blake2b|Blake2s|DSTU7564|Skein)"
+                                    .toRegex(),
+                                "$1-",
+                            )
+                    }
                 println("算法 $method")
-                if (inputText.isNotEmpty() && !isFileMode.get()) {
+                if (inputText.isNotEmpty() && !fileMode.get()) {
                     doHash()
                 }
             }
         }
         hbox {
-            alignment = Pos.CENTER_LEFT
-            spacing = DEFAULT_SPACING
+            addClass(Styles.left)
             paddingLeft = DEFAULT_SPACING
-            checkbox(messages["fileMode"], isFileMode)
-            checkbox(messages["singleLine"], isSingleLine)
-            button(messages["run"], imageview("/img/run.png")) {
-                enableWhen(!isProcessing)
+            checkbox(messages["fileMode"], fileMode) { enableWhen(enableFileMode) }
+            checkbox(messages["singleLine"], singleLine)
+
+            label("times:")
+            tfCount =
+                textfield("1") {
+                    textFormatter = intTextFormatter
+                    prefWidth = DEFAULT_SPACING_8X
+                    enableWhen(!fileMode)
+                }
+            button(messages["run"], imageview(IMG_RUN)) {
+                enableWhen(!processing)
                 action { doHash() }
             }
+            button("crack", imageview(IMG_CRACK)) {
+                enableWhen(!processing)
+                action { crack() }
+                tooltip("default top1000 password, you can add your dict file at /dict") {
+                    isWrapText = true
+                }
+            }
+            button("cmd5", imageview("/img/browser.png")) {
+                action { "https://www.cmd5.com/".openInBrowser() }
+            }
+            checkbox("mask", maskMode)
+        }
+        hbox {
+            visibleWhen(maskMode)
+            addClass(Styles.left)
+            paddingLeft = DEFAULT_SPACING
+            label("mask:")
+            tfMask =
+                textfield("?d?l?u?c??") {
+                    prefWidth = DEFAULT_SPACING_32X
+                    tooltip(
+                        "like hash-cat,?d ?l ?u ?a ?s, and more: ?? for ?, ?* for custom dict,?c for letter"
+                    )
+                }
+
+            label("custom dict:")
+            tfCustomDict =
+                textfield("0123456789") {
+                    prefWidth = DEFAULT_SPACING_32X
+                    tooltip("for mask ?*")
+                }
         }
         hbox {
             label(messages["output"])
-            button(graphic = imageview("/img/copy.png")) { action { outputText.copy() } }
-        }
-        taOutput =
-            textarea {
-                promptText = messages["outputHint"]
-                isWrapText = true
+            button(graphic = imageview(IMG_COPY)) {
+                tooltip(messages["copy"])
+                action { outputText.copy() }
             }
+        }
+        taOutput = textarea {
+            vgrow = Priority.ALWAYS
+            promptText = messages["outputHint"]
+            isWrapText = true
+            contextmenu {
+                item("uppercase") { action { taOutput.text = taOutput.text.uppercase() } }
+                item("lowercase") { action { taOutput.text = taOutput.text.lowercase() } }
+                item("base64") { action { taOutput.text = taOutput.text.hex2ByteArray().base64() } }
+                item("hex") { action { taOutput.text = taOutput.text.base64Decode().toHex() } }
+            }
+        }
     }
+
     override val root = borderpane {
         center = centerNode
         bottom = hbox { labelInfo = label(info) }
     }
 
-    private fun doHash() =
+    private fun crack() {
         runAsync {
-            isProcessing.value = true
-            if (isFileMode.get()) inputText.lineAction2String { controller.digestFile(method, it) }
-            else controller.digest(method, inputText, isSingleLine.get())
+            processing.value = true
+            startTime = System.currentTimeMillis()
+            if (maskMode.get()) {
+                controller.maskCrack(
+                    method,
+                    inputText
+                        .decodeToByteArray(inputEncode.takeUnless { it == "raw" } ?: "hex")
+                        .encodeTo("hex"),
+                    tfMask.text,
+                    tfCustomDict.text,
+                )
+            } else {
+                if (method.startsWith("SpringSecurity")) {
+                    controller.passwordHashingCrack(method, inputText)
+                } else {
+                    controller.crack(
+                        method,
+                        if (method == "mysql5") {
+                            inputText
+                        } else {
+                            inputText
+                                .decodeToByteArray(inputEncode.takeUnless { it == "raw" } ?: "hex")
+                                .encodeTo("hex")
+                        },
+                    )
+                }
+            }
         } ui
             {
-                isProcessing.value = false
+                processing.value = false
                 outputText = it
+                timeConsumption = System.currentTimeMillis() - startTime
                 labelInfo.text = info
-                if (Prefs.autoCopy)
+                if (Prefs.autoCopy) {
                     outputText.copy().also { primaryStage.showToast(messages["copied"]) }
+                }
+                System.gc()
+            }
+    }
+
+    private fun doHash() =
+        runAsync {
+            processing.value = true
+            startTime = System.currentTimeMillis()
+            if (fileMode.get()) {
+                inputText.lineAction2String { controller.digestFile(method, it) }
+            } else {
+                var result: String = inputText
+                repeat(times) { time ->
+                    result =
+                        controller.digest(
+                            method,
+                            result,
+                            "raw".takeIf { time > 0 } ?: inputEncode,
+                            singleLine.get(),
+                        )
+                }
+                result
+            }
+        } ui
+            {
+                processing.value = false
+                outputText = it
+                timeConsumption = System.currentTimeMillis() - startTime
+                labelInfo.text = info
+                if (Prefs.autoCopy) {
+                    outputText.copy().also { primaryStage.showToast(messages["copied"]) }
+                }
             }
 }

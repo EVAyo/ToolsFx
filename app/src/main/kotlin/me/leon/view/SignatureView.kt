@@ -4,45 +4,19 @@ import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleStringProperty
 import javafx.geometry.Pos
 import javafx.scene.control.*
+import javafx.scene.layout.Priority
+import me.leon.*
 import me.leon.controller.SignatureController
+import me.leon.domain.SimpleMsgEvent
+import me.leon.encode.base.base64
 import me.leon.ext.*
+import me.leon.ext.crypto.parsePublicKeyFromCerFile
+import me.leon.ext.fx.*
 import tornadofx.*
 import tornadofx.FX.Companion.messages
 
-class SignatureView : View(messages["signVerify"]) {
+class SignatureView : Fragment(messages["signVerify"]) {
     private val controller: SignatureController by inject()
-    override val closeable = SimpleBooleanProperty(false)
-    private val isSingleLine = SimpleBooleanProperty(false)
-    private lateinit var taKey: TextArea
-    private lateinit var taRaw: TextArea
-    private lateinit var labelInfo: Label
-    private lateinit var taSigned: TextArea
-    private val key: String
-        get() = taKey.text
-    private val msg: String
-        get() = taRaw.text
-    private val signText: String
-        get() = taSigned.text
-    private var keyPairAlg = "RSA"
-
-    private val eventHandler = fileDraggedHandler {
-        taKey.text =
-            with(it.first()) {
-                if (length() <= 10 * 1024 * 1024)
-                    if (realExtension() in unsupportedExts) "unsupported file extension"
-                    else readText()
-                else "not support file larger than 10M"
-            }
-    }
-    private val inputEventHandler = fileDraggedHandler {
-        taKey.text =
-            with(it.first()) {
-                if (length() <= 10 * 1024 * 1024)
-                    if (realExtension() in unsupportedExts) "unsupported file extension"
-                    else readText()
-                else "not support file larger than 10M"
-            }
-    }
 
     // https://www.bouncycastle.org/specifications.html
     private val keyPairAlgs =
@@ -82,7 +56,14 @@ class SignatureView : View(messages["signVerify"]) {
                     "SHA512(256)withRSA/X9.31",
                     "RIPEMD128withRSA/X9.31",
                     "RIPEMD160withRSA/X9.31",
-                    "WHIRLPOOLwithRSA/X9.31"
+                    "WHIRLPOOLwithRSA/X9.31",
+                ),
+            "RSASSA-PSS" to
+                listOf(
+                    "RAWRSASSA-PSS",
+                    "SHA256withRSA/PSS",
+                    "SHAKE128WITHRSAPSS",
+                    "SHAKE256WITHRSAPSS",
                 ),
             "DSA" to
                 listOf(
@@ -96,7 +77,7 @@ class SignatureView : View(messages["signVerify"]) {
                     "SHA3-224withDSA",
                     "SHA3-256withDSA",
                     "SHA3-384withDSA",
-                    "SHA3-512withDSA"
+                    "SHA3-512withDSA",
                 ),
             "ECDSA" to
                 listOf(
@@ -112,7 +93,7 @@ class SignatureView : View(messages["signVerify"]) {
                     "SHA3-384withECDSA",
                     "SHA3-512withECDSA",
                     "SHAKE128withECDSA",
-                    "SHAKE256withECDSA"
+                    "SHAKE256withECDSA",
                 ),
             "SM2" to listOf("SHA256withSM2", "SM3withSM2"),
             "Ed448" to listOf("Ed448"),
@@ -123,46 +104,152 @@ class SignatureView : View(messages["signVerify"]) {
                     "SHA224withECNR",
                     "SHA256withECNR",
                     "SHA384withECNR",
-                    "SHA512withECNR"
-                )
+                    "SHA512withECNR",
+                ),
+            "JWT" to
+                listOf(
+                    "HS256",
+                    "HS384",
+                    "HS512",
+                    "RS256",
+                    "RS384",
+                    "RS512",
+                    "ES256",
+                    "ES384",
+                    "ES512",
+                    "PS256",
+                    "PS384",
+                    "PS512",
+                ),
         )
+    private var timeConsumption = 0L
+    private var startTime = 0L
+    private var inputEncode = "raw"
+    private var outputEncode = "base64"
 
+    override val closeable = SimpleBooleanProperty(false)
+    private val singleLine = SimpleBooleanProperty(false)
+    private val showPrivateKey = SimpleBooleanProperty(true)
     private val selectedKeyPairAlg = SimpleStringProperty(keyPairAlgs.keys.first())
     private val selectedSigAlg = SimpleStringProperty(keyPairAlgs.values.first().first())
-    private lateinit var cbSigs: ComboBox<String>
+
+    private var taPubKey: TextArea by singleAssign()
+    private var taPriKey: TextArea by singleAssign()
+    private var taRaw: TextArea by singleAssign()
+    private var labelInfo: Label by singleAssign()
+    private var taSigned: TextArea by singleAssign()
+    private var tgInput: ToggleGroup by singleAssign()
+    private var tgOutput: ToggleGroup by singleAssign()
+    private var cbSigs: ComboBox<String> by singleAssign()
+
+    private val SAME_KEY_ALGS = arrayOf("HS256", "HS384", "HS512")
+    private val msg: String
+        get() = taRaw.text
+
+    private val signText: String
+        get() = taSigned.text
+
+    private val eventHandler = fileDraggedHandler {
+        taPubKey.text =
+            with(it.first()) {
+                when (extension) {
+                    in listOf("pk8", "key", "der") -> {
+                        val text = readText()
+                        if (text.startsWith("-----BEGIN")) {
+                            text
+                        } else {
+                            readBytes().base64()
+                        }
+                    }
+                    in listOf("cer", "crt") -> {
+                        parsePublicKeyFromCerFile()
+                    }
+                    else -> {
+                        properText()
+                    }
+                }
+            }
+    }
+    private val priKeyEventHandler = fileDraggedHandler {
+        taPriKey.text =
+            with(it.first()) {
+                when (extension) {
+                    in listOf("pk8", "key", "der") -> {
+                        val text = readText()
+                        if (text.startsWith("-----BEGIN")) {
+                            text
+                        } else {
+                            readBytes().base64()
+                        }
+                    }
+                    in listOf("cer", "crt") -> {
+                        parsePublicKeyFromCerFile()
+                    }
+                    else -> {
+                        properText()
+                    }
+                }
+            }
+    }
+    private val inputEventHandler = fileDraggedHandler { taRaw.text = it.first().properText() }
+
     private val info
-        get() = "Signature: $keyPairAlg hash: ${selectedSigAlg.get()} "
+        get() =
+            "Signature: ${selectedKeyPairAlg.get()} hash: ${selectedSigAlg.get()} " +
+                "${messages["inputLength"]}: ${msg.length}  " +
+                "${messages["outputLength"]}: ${signText.length}  " +
+                "cost: $timeConsumption ms"
 
     private val centerNode = vbox {
-        paddingAll = DEFAULT_SPACING
-        spacing = DEFAULT_SPACING
-        hbox {
-            label(messages["key"])
-            button(graphic = imageview("/img/import.png")) {
-                action { taKey.text = clipboardText() }
-            }
-        }
-        taKey =
-            textarea {
-                promptText = messages["inputHint"]
-                isWrapText = true
-                onDragEntered = eventHandler
-            }
+        addClass(Styles.group)
         hbox {
             label(messages["plain"])
-            button(graphic = imageview("/img/import.png")) {
+            addClass(Styles.left)
+            tgInput = togglegroup {
+                radiobutton("raw") { isSelected = true }
+                radiobutton("base64")
+                radiobutton("hex")
+                selectedToggleProperty().addListener { _, _, newValue ->
+                    inputEncode = newValue.cast<RadioButton>().text
+                }
+            }
+
+            button(graphic = imageview(IMG_IMPORT)) {
+                tooltip(messages["pasteFromClipboard"])
                 action { taRaw.text = clipboardText() }
             }
         }
-        taRaw =
-            textarea {
-                promptText = messages["inputHint"]
-                isWrapText = true
-                onDragEntered = inputEventHandler
-                prefHeight = DEFAULT_SPACING_16X
-            }
+        taRaw = textarea {
+            promptText = messages["inputHint"]
+            isWrapText = true
+            onDragEntered = inputEventHandler
+            prefHeight = DEFAULT_SPACING_16X
+        }
         hbox {
-            alignment = Pos.CENTER_LEFT
+            label(messages["key"])
+            button(graphic = imageview(IMG_IMPORT)) {
+                tooltip(messages["pasteFromClipboard"])
+                action { taPubKey.text = clipboardText() }
+            }
+        }
+
+        hbox {
+            spacing = DEFAULT_SPACING_3X
+            taPubKey = textarea {
+                promptText = messages["inputHintAsyPub"]
+                isWrapText = true
+                onDragEntered = eventHandler
+            }
+            taPriKey = textarea {
+                promptText = messages["inputHintAsyPri"]
+                isWrapText = true
+                visibleWhen(showPrivateKey)
+                onDragEntered = priKeyEventHandler
+            }
+        }
+
+        hbox {
+            addClass(Styles.left)
             label(messages["publicAlg"])
             combobox(selectedKeyPairAlg, keyPairAlgs.keys.toMutableList()) {
                 cellFormat { text = it }
@@ -177,23 +264,24 @@ class SignatureView : View(messages["signVerify"]) {
                 cbSigs.items = keyPairAlgs[newValue]!!.asObservable()
                 selectedSigAlg.set(keyPairAlgs[newValue]!!.first())
                 cbSigs.isDisable = keyPairAlgs[newValue]!!.size == 1
+                timeConsumption = 0
+                labelInfo.text = info
             }
         }
 
         selectedSigAlg.addListener { _, _, newValue ->
             println("selectedSigAlg __ $newValue")
-            newValue?.run {
-                println("算法 ${selectedKeyPairAlg.get()}")
-                if (key.isNotEmpty() && msg.isNotEmpty()) {
-                    sign()
-                }
-            }
+
+            showPrivateKey.value = !SAME_KEY_ALGS.contains(newValue)
+            timeConsumption = 0
+            labelInfo.text = info
+            newValue?.run { println("算法 ${selectedKeyPairAlg.get()}") }
         }
         tilepane {
             alignment = Pos.CENTER
             paddingTop = DEFAULT_SPACING
             hgap = DEFAULT_SPACING_4X
-            checkbox(messages["singleLine"], isSingleLine)
+            checkbox(messages["singleLine"], singleLine)
             button(messages["priSig"]) {
                 action { sign() }
                 setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE)
@@ -204,16 +292,34 @@ class SignatureView : View(messages["signVerify"]) {
             }
         }
         hbox {
+            addClass(Styles.left)
             label(messages["sig"])
-            button(graphic = imageview("/img/copy.png")) { action { signText.copy() } }
+            tgOutput = togglegroup {
+                radiobutton("base64") { isSelected = true }
+                radiobutton("hex")
+                selectedToggleProperty().addListener { _, _, newValue ->
+                    outputEncode = newValue.cast<RadioButton>().text
+                }
+            }
+
+            button(graphic = imageview(IMG_COPY)) {
+                tooltip(messages["copy"])
+                action { signText.copy() }
+            }
         }
 
-        taSigned =
-            textarea {
-                promptText = messages["outputHint"]
-                isWrapText = true
-                prefHeight = DEFAULT_SPACING_10X
+        taSigned = textarea {
+            vgrow = Priority.ALWAYS
+            promptText = messages["outputHint"]
+            isWrapText = true
+        }
+        subscribe<SimpleMsgEvent> {
+            if (it.type == 1) {
+                taPubKey.text = it.msg
+            } else if (it.type == 2) {
+                taPriKey.text = it.msg
             }
+        }
     }
     override val root = borderpane {
         center = centerNode
@@ -222,33 +328,56 @@ class SignatureView : View(messages["signVerify"]) {
 
     private fun sign() =
         runAsync {
-            controller.sign(
-                selectedKeyPairAlg.get(),
-                selectedSigAlg.get(),
-                key,
-                msg,
-                isSingleLine.get()
-            )
+            startTime = System.currentTimeMillis()
+            runCatching {
+                    controller.sign(
+                        selectedKeyPairAlg.get(),
+                        selectedSigAlg.get(),
+                        if (SAME_KEY_ALGS.contains(selectedSigAlg.get())) {
+                            taPubKey.text
+                        } else {
+                            taPriKey.text
+                        },
+                        msg,
+                        inputEncode,
+                        outputEncode,
+                        singleLine.get(),
+                    )
+                }
+                .getOrElse { it.stacktrace() }
         } ui
             {
                 taSigned.text = it
-                labelInfo.text = info
                 if (Prefs.autoCopy) it.copy().also { primaryStage.showToast(messages["copied"]) }
+                timeConsumption = System.currentTimeMillis() - startTime
+                labelInfo.text = info
             }
 
     private fun verify() =
         runAsync {
-            controller.verify(
-                selectedKeyPairAlg.get(),
-                selectedSigAlg.get(),
-                key,
-                msg,
-                signText,
-                isSingleLine.get()
-            )
+            runCatching {
+                    startTime = System.currentTimeMillis()
+                    controller.verify(
+                        selectedKeyPairAlg.get(),
+                        selectedSigAlg.get(),
+                        taPubKey.text,
+                        msg,
+                        inputEncode,
+                        outputEncode,
+                        signText,
+                        singleLine.get(),
+                    )
+                }
+                .getOrElse { it.stacktrace() }
         } ui
             { state ->
-                primaryStage.showToast("验签结果: \n$state")
+                if (selectedKeyPairAlg.get() == "JWT" && signText.isNotEmpty()) {
+                    val (alg, payload) = signText.jwtParse()
+                    selectedSigAlg.set(alg)
+                    taRaw.text = payload
+                }
+                primaryStage.showToast("result: \n$state")
+                timeConsumption = System.currentTimeMillis() - startTime
                 labelInfo.text = info
             }
 }

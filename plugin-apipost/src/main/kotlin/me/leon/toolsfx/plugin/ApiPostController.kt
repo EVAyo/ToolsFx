@@ -7,9 +7,9 @@ import tornadofx.*
 class ApiPostController : Controller() {
 
     private fun replacePlaceHolder(maps: MutableMap<String, Any>): MutableMap<String, Any> {
-        maps.entries.filter { it.value is String }.forEach { entry ->
-            maps[entry.key] = (entry.value as String).replacePlaceHolders()
-        }
+        maps.entries
+            .filter { it.value is String }
+            .forEach { entry -> maps[entry.key] = (entry.value as String).replacePlaceHolders() }
         return maps
     }
 
@@ -19,12 +19,11 @@ class ApiPostController : Controller() {
         params: MutableMap<String, Any> = mutableMapOf(),
         headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
-        println("req: $url")
         return HttpUrlUtil.request(
-            url.replacePlaceHolders(),
+            url.addHttp().replacePlaceHolders(),
             method,
             replacePlaceHolder(params),
-            replacePlaceHolder(headers)
+            replacePlaceHolder(headers),
         )
     }
 
@@ -35,15 +34,18 @@ class ApiPostController : Controller() {
         headers: MutableMap<String, Any> = mutableMapOf(),
         bodyType: BodyType = BodyType.RAW,
     ) =
-        if (method != "POST") request(url, method, params, headers)
-        else if (bodyType == BodyType.RAW) throw IllegalArgumentException("call postRaw")
-        else
+        if (method != "POST") {
+            request(url.addHttp(), method, params, headers)
+        } else if (bodyType == BodyType.RAW) {
+            kotlin.error("call postRaw")
+        } else {
             HttpUrlUtil.post(
-                url.replacePlaceHolders(),
+                url.addHttp().replacePlaceHolders(),
                 replacePlaceHolder(params),
                 replacePlaceHolder(headers),
-                bodyType == BodyType.JSON
+                bodyType == BodyType.JSON,
             )
+        }
 
     fun postRaw(
         url: String,
@@ -51,9 +53,9 @@ class ApiPostController : Controller() {
         headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
         return HttpUrlUtil.postData(
-            url.replacePlaceHolders(),
+            url.addHttp().replacePlaceHolders(),
             data.replacePlaceHolders(),
-            replacePlaceHolder(headers)
+            replacePlaceHolder(headers),
         )
     }
 
@@ -61,13 +63,13 @@ class ApiPostController : Controller() {
         url: String,
         params: MutableMap<String, Any> = mutableMapOf(),
         headers: MutableMap<String, Any> = mutableMapOf(),
-        isJson: Boolean = false
+        isJson: Boolean = false,
     ): Response {
         return HttpUrlUtil.post(
-            url.replacePlaceHolders(),
+            url.addHttp().replacePlaceHolders(),
             replacePlaceHolder(params),
             replacePlaceHolder(headers),
-            isJson
+            isJson,
         )
     }
 
@@ -76,14 +78,14 @@ class ApiPostController : Controller() {
         files: List<File>,
         fileParamName: String,
         params: MutableMap<String, Any> = mutableMapOf(),
-        headers: MutableMap<String, Any> = mutableMapOf()
+        headers: MutableMap<String, Any> = mutableMapOf(),
     ): Response {
         return HttpUrlUtil.postFile(
-            url.replacePlaceHolders(),
+            url.addHttp().replacePlaceHolders(),
             files,
             fileParamName,
             replacePlaceHolder(params),
-            replacePlaceHolder(headers)
+            replacePlaceHolder(headers),
         )
     }
 

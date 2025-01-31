@@ -1,0 +1,60 @@
+[versions]
+asmVer = "3.2.0"
+# https://mvnrepository.com/artifact/org.bouncycastle/bcprov-jdk18on
+# https://www.bouncycastle.org/releasenotes.html
+bcVer = "1.80"
+commonCompressVer = "1.27.1"
+coroutineVer = "1.10.1"
+gsonVer = "2.12.1"
+javassistVer = "3.30.2-GA"
+javaxJsonVer = "1.1.4"
+# openjfx LTS version needs Subscription https://mvnrepository.com/artifact/org.openjfx/javafx-controls
+# jfx 20.x+ requires jdk 17+
+jfxVer = "23.0.1"
+jnaVer = "5.16.0"
+kotlinSerVer = "1.8.0"
+kotlinVer = "2.1.10"
+mockitoCoreVer = "5.14.2"
+nashornVer = "15.6"
+seleniumVer = "4.27.0"
+sqliteVer = "3.48.0.0"
+tornadofxVer = "1.7.20"
+zstdVer = "1.5.6-9"
+zxingVer = "3.5.3"
+jsoupVer = "1.18.3"
+
+# plugin
+# https://detekt.dev/changelog/
+detektVer = "1.23.7"
+javafxVer = "0.1.0"
+# https://github.com/diffplug/spotless/blob/main/plugin-gradle/CHANGES.md
+spotlessVer = "7.0.2"
+
+
+[libraries]
+asm = { module = "org.objectweb.asm:com.springsource.org.objectweb.asm", version.ref = "asmVer" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bcVer" }
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commonCompressVer" }
+detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detektVer" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gsonVer" }
+javassist = { module = "org.javassist:javassist", version.ref = "javassistVer" }
+javax-json = { module = "org.glassfish:javax.json", version.ref = "javaxJsonVer" }
+jna-platform = { module = "net.java.dev.jna:jna-platform", version.ref = "jnaVer" }
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlinVer" }
+kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinSerVer" }
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlinVer" }
+kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutineVer" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutineVer" }
+mockito = { module = "org.mockito:mockito-core", version.ref = "mockitoCoreVer" }
+nashron = { module = "org.openjdk.nashorn:nashorn-core", version.ref = "nashornVer" }
+selenium = { module = "org.seleniumhq.selenium:selenium-java", version.ref = "seleniumVer" }
+sqlite = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteVer" }
+tornadofx = { module = "no.tornado:tornadofx", version.ref = "tornadofxVer" }
+zstd = { module = "com.github.luben:zstd-jni", version.ref = "zstdVer" }
+zxing = { module = "com.google.zxing:javase", version.ref = "zxingVer" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoupVer" }
+
+[plugins]
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detektVer" }
+javafx = { id = "org.openjfx.javafxplugin", version.ref = "javafxVer" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotlessVer" }

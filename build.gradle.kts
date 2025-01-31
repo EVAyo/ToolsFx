@@ -1,39 +1,38 @@
-
 plugins {
-    kotlin("jvm") version "1.5.31"
-    id("com.diffplug.spotless") version "5.15.0"
-    id("io.gitlab.arturbosch.detekt") version "1.18.1"
-    id("org.openjfx.javafxplugin") version "0.0.10"
+    kotlin("jvm") version libs.versions.kotlinVer.get()
+    alias(libs.plugins.detekt)
+    alias(libs.plugins.javafx)
+    alias(libs.plugins.spotless)
 }
 
-repositories {
-    mavenCentral()
-    maven { url = uri("https://maven.aliyun.com/repository/public") }
-    maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
-    maven { url = uri("https://maven.aliyun.com/repository/google") }
-}
-
-apply(from = "${rootProject.projectDir}/config/Versions.gradle.kts")
+val jvmTarget = "1.8"
 
 subprojects {
     apply(from = "${rootProject.projectDir}/config/codeQuality.gradle")
-
     apply(plugin = "org.openjfx.javafxplugin")
     apply(plugin = "org.jetbrains.kotlin.jvm")
-    repositories {
-        mavenCentral()
-        maven { url = uri("https://maven.aliyun.com/repository/public") }
-        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
+
+    dependencies {
+        detektPlugins(rootProject.libs.detekt.formatting)
+    }
+    tasks.withType<JavaCompile> {
+        options.encoding = "UTF-8"
+        targetCompatibility = jvmTarget
+        sourceCompatibility = jvmTarget
+    }
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        kotlinOptions.jvmTarget = jvmTarget
     }
 }
 
 val hook = File("${rootProject.projectDir}/.git/hooks/pre-commit")
+hook.parentFile.mkdirs()
 hook.writeBytes(
-    """#!/bin/bash
-echo "run code format"
-./gradlew spotlessJCh spotlessKCh
-echo "run code smell check"
-./gradlew detekt
-""".toByteArray()
+    """
+        #!/bin/bash
+        echo "run code format"
+        ./gradlew spotlessCheck
+        echo "run code smell check"
+        ./gradlew detekt
+    """.trimIndent().toByteArray()
 )

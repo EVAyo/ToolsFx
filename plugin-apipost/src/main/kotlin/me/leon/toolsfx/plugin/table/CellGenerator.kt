@@ -1,10 +1,13 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package me.leon.toolsfx.plugin.table
 
 import javafx.event.EventHandler
 import javafx.scene.Node
 import javafx.scene.control.Cell
 import javafx.scene.control.TextField
-import javafx.scene.input.*
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
 import javafx.scene.layout.HBox
 import javafx.util.StringConverter
 
@@ -13,7 +16,7 @@ internal object CellGenerator {
     private val defaultStringConverter: StringConverter<*> =
         object : StringConverter<Any?>() {
             override fun toString(t: Any?): String {
-                return t?.toString() ?: ""
+                return t?.toString().orEmpty()
             }
 
             override fun fromString(string: String): Any? {
@@ -26,8 +29,15 @@ internal object CellGenerator {
     }
 
     private fun <T> getItemText(cell: Cell<T>, converter: StringConverter<T>?): String {
-        return if (converter == null) if (cell.item == null) "" else cell.item.toString()
-        else converter.toString(cell.item)
+        return if (converter == null) {
+            if (cell.item == null) {
+                ""
+            } else {
+                cell.item.toString()
+            }
+        } else {
+            converter.toString(cell.item)
+        }
     }
 
     fun <T> updateItem(cell: Cell<T>, converter: StringConverter<T>?, textField: TextField?) {
@@ -40,7 +50,7 @@ internal object CellGenerator {
         converter: StringConverter<T>?,
         hbox: HBox?,
         graphic: Node?,
-        textField: TextField?
+        textField: TextField?,
     ) {
         if (cell.isEmpty) {
             cell.text = null
@@ -70,7 +80,7 @@ internal object CellGenerator {
         converter: StringConverter<T>?,
         hbox: HBox?,
         graphic: Node?,
-        textField: TextField?
+        textField: TextField?,
     ) {
         if (textField != null) {
             textField.text = getItemText(cell, converter)
@@ -94,18 +104,18 @@ internal object CellGenerator {
 
     @JvmStatic
     fun <T> createTextField(cell: Cell<T>, converter: StringConverter<T>?): TextField {
-        val textField = TextField(getItemText<T>(cell, converter))
+        val textField = TextField(getItemText(cell, converter))
         val cellEdit = cell as EditingCell<*, *>
-        textField.onMouseExited =
-            EventHandler {
-                checkNotNull(converter) {
-                    ("Attempting to convert text input into Object, but provided " +
-                        "StringConverter is null. Be sure to set a StringConverter " +
-                        "in your cell factory.")
-                }
-                cell.commitEdit(converter.fromString(textField.text))
+        textField.onMouseExited = EventHandler {
+            checkNotNull(converter) {
+                ("Attempting to convert text input into Object, but provided " +
+                    "StringConverter is null. Be sure to set a StringConverter " +
+                    "in your cell factory.")
             }
+            cell.commitEdit(converter.fromString(textField.text))
+        }
         textField.addEventFilter(KeyEvent.KEY_PRESSED) { event: KeyEvent ->
+            @Suppress("ElseCaseInsteadOfExhaustiveWhen")
             when (event.code) {
                 KeyCode.ESCAPE -> {
                     cell.cancelEdit()
@@ -140,6 +150,9 @@ internal object CellGenerator {
                     cell.commitEdit(converter!!.fromString(textField.text))
                     cellEdit.setNextColumn(event)
                     event.consume()
+                }
+                else -> {
+                    // nop
                 }
             }
         }
